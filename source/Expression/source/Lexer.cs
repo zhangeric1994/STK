@@ -1,17 +1,17 @@
 ﻿using System.Collections.Generic;
 
 
-namespace STK.Formula
+namespace STK.Expression
 {
-    public class FormulaLexer
+    public class Lexer
     {
         public const char VARIABLE_START = '[';
         public const char VARIABLE_END = ']';
 
 
-        public List<FormulaToken> GenerateTokens(string input)
+        public List<Token> GenerateTokens(string input)
         {
-            List<FormulaToken> result;
+            List<Token> result;
             if (GenerateTokens(input, out result))
             {
                 return result;
@@ -21,9 +21,9 @@ namespace STK.Formula
         }
 
 
-        public bool GenerateTokens(string input, out List<FormulaToken> output)
+        public bool GenerateTokens(string input, out List<Token> output)
         {
-            output = new List<FormulaToken>();
+            output = new List<Token>();
 
 
             for (int i = 0; i < input.Length;)
@@ -62,7 +62,7 @@ namespace STK.Formula
                         }
 
 
-                        output.Add(new FormulaToken("CONSTANT", input.Substring(i, count)));
+                        output.Add(new Token("CONSTANT", input.Substring(i, count)));
 
 
                         i += count;
@@ -90,7 +90,7 @@ namespace STK.Formula
                                 }
 
 
-                                output.Add(new FormulaToken("VARIABLE", input.Substring(i, count)));
+                                output.Add(new Token("VARIABLE", input.Substring(i, count)));
 
 
                                 i += count + 1;
@@ -98,37 +98,37 @@ namespace STK.Formula
 
 
                             case '+':
-                                output.Add(new FormulaToken("ADDITION"));
+                                output.Add(new Token("ADDITION"));
                                 ++i;
                                 break;
 
 
                             case '-':
-                                output.Add(new FormulaToken("SUBTRACTION"));
+                                output.Add(new Token("SUBTRACTION"));
                                 ++i;
                                 break;
 
 
                             case '*':
-                                output.Add(new FormulaToken("MULTIPLICATION"));
+                                output.Add(new Token("MULTIPLICATION"));
                                 ++i;
                                 break;
 
 
                             case '/':
-                                output.Add(new FormulaToken("DIVISION"));
+                                output.Add(new Token("DIVISION"));
                                 ++i;
                                 break;
 
 
                             case '(':
-                                output.Add(new FormulaToken("LEFT_PARENTHESIS"));
+                                output.Add(new Token("LEFT_PARENTHESIS"));
                                 ++i;
                                 break;
 
 
                             case ')':
-                                output.Add(new FormulaToken("RIGHT_PARENTHESIS"));
+                                output.Add(new Token("RIGHT_PARENTHESIS"));
                                 ++i;
                                 break;
 
@@ -153,20 +153,20 @@ namespace STK.Formula
         }
 
 
-        protected virtual bool HandleUnexpectedCharacter(string input, ref List<FormulaToken> output, ref int index)
+        protected virtual bool HandleUnexpectedCharacter(string input, ref List<Token> output, ref int index)
         {
             return false;
         }
     }
 
 
-    public class FormulaToken
+    public class Token
     {
         public readonly string type;
         public readonly string text;
 
 
-        public FormulaToken(string type, string text = "")
+        public Token(string type, string text = "")
         {
             this.type = type.ToUpper();
             this.text = text;

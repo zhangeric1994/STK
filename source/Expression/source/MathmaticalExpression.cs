@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 
 
-namespace STK.Formula
+namespace STK.Expression
 {
     public interface IEvaluable
     {
@@ -9,15 +9,15 @@ namespace STK.Formula
     }
 
 
-    public readonly struct Formula : IEvaluable
+    public readonly struct MathmaticalExpression : IEvaluable
     {
-        public static Formula NONE = new Formula(null);
+        public static MathmaticalExpression NONE = new MathmaticalExpression(null);
 
 
         private readonly IEvaluable startNode;
 
 
-        public static Formula operator +(Formula lhs, Formula rhs)
+        public static MathmaticalExpression operator +(MathmaticalExpression lhs, MathmaticalExpression rhs)
         {
             if (lhs.startNode == null)
             {
@@ -31,14 +31,14 @@ namespace STK.Formula
             }
 
 
-            return new Formula(new AdditionNode(lhs.startNode, rhs.startNode));
+            return new MathmaticalExpression(new AdditionNode(lhs.startNode, rhs.startNode));
         }
 
-        public static Formula operator -(Formula lhs, Formula rhs)
+        public static MathmaticalExpression operator -(MathmaticalExpression lhs, MathmaticalExpression rhs)
         {
             if (lhs.startNode == null)
             {
-                return new Formula(new NegationNode(rhs.startNode));
+                return new MathmaticalExpression(new NegationNode(rhs.startNode));
             }
 
 
@@ -48,10 +48,10 @@ namespace STK.Formula
             }
 
 
-            return new Formula(new SubstractionNode(lhs.startNode, rhs.startNode));
+            return new MathmaticalExpression(new SubstractionNode(lhs.startNode, rhs.startNode));
         }
 
-        public static Formula operator *(Formula lhs, Formula rhs)
+        public static MathmaticalExpression operator *(MathmaticalExpression lhs, MathmaticalExpression rhs)
         {
             if (lhs.startNode == null)
             {
@@ -65,10 +65,10 @@ namespace STK.Formula
             }
 
 
-            return new Formula(new MultiplicationNode(lhs.startNode, rhs.startNode));
+            return new MathmaticalExpression(new MultiplicationNode(lhs.startNode, rhs.startNode));
         }
 
-        public static Formula operator /(Formula lhs, Formula rhs)
+        public static MathmaticalExpression operator /(MathmaticalExpression lhs, MathmaticalExpression rhs)
         {
             if (lhs.startNode == null)
             {
@@ -82,11 +82,11 @@ namespace STK.Formula
             }
 
 
-            return new Formula(new DivisionNode(lhs.startNode, rhs.startNode));
+            return new MathmaticalExpression(new DivisionNode(lhs.startNode, rhs.startNode));
         }
 
 
-        public Formula(IEvaluable startNode)
+        public MathmaticalExpression(IEvaluable startNode)
         {
             this.startNode = startNode;
         }
@@ -241,6 +241,64 @@ namespace STK.Formula
         public float Evaluate(params IDictionary<string, float>[] variableDictionaries)
         {
             return dividend.Evaluate(variableDictionaries) / divisor.Evaluate(variableDictionaries);
+        }
+    }
+
+
+    public readonly struct LogicalNegationNode : IEvaluable
+    {
+        private readonly IEvaluable node;
+
+
+        public LogicalNegationNode(IEvaluable node)
+        {
+            this.node = node;
+        }
+
+
+        public float Evaluate(params IDictionary<string, float>[] variableDictionaries)
+        {
+            return node.Evaluate(variableDictionaries) == 0 ? 1 : 0;
+        }
+    }
+
+
+    public readonly struct LogicalAndNode : IEvaluable
+    {
+        private readonly IEvaluable lhs;
+        private readonly IEvaluable rhs;
+
+
+        public LogicalAndNode(IEvaluable lhs, IEvaluable rhs)
+        {
+            this.lhs = lhs;
+            this.rhs = rhs;
+        }
+
+
+        public float Evaluate(params IDictionary<string, float>[] variableDictionaries)
+        {
+            return lhs.Evaluate(variableDictionaries) > 0 && rhs.Evaluate(variableDictionaries) > 0 ? 1 : 0;
+        }
+    }
+
+
+    public readonly struct LogicalOrNode : IEvaluable
+    {
+        private readonly IEvaluable lhs;
+        private readonly IEvaluable rhs;
+
+
+        public LogicalOrNode(IEvaluable lhs, IEvaluable rhs)
+        {
+            this.lhs = lhs;
+            this.rhs = rhs;
+        }
+
+
+        public float Evaluate(params IDictionary<string, float>[] variableDictionaries)
+        {
+            return lhs.Evaluate(variableDictionaries) > 0 || rhs.Evaluate(variableDictionaries) > 0 ? 1 : 0;
         }
     }
 }

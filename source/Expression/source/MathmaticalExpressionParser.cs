@@ -1,18 +1,18 @@
 ﻿using System.Collections.Generic;
 
 
-namespace STK.Formula
+namespace STK.Expression
 {
-    public class FormulaParser
+    public class MathmaticalExpressionParser
     {
-        public Formula Parse(List<FormulaToken> input)
+        public MathmaticalExpression Parse(List<Token> input)
         {
             int i = 0;
-            return new Formula(ParseExpression(input, ref i));
+            return new MathmaticalExpression(ParseExpression(input, ref i));
         }
 
 
-        private IEvaluable ParseExpression(List<FormulaToken> input, ref int i)
+        private IEvaluable ParseExpression(List<Token> input, ref int i)
         {
             if (i >= input.Count)
                 return null;
@@ -58,7 +58,7 @@ namespace STK.Formula
         }
 
 
-        private IEvaluable ParseTerm(List<FormulaToken> input, ref int i)
+        private IEvaluable ParseTerm(List<Token> input, ref int i)
         {
             if (i >= input.Count)
                 return null;
@@ -104,13 +104,13 @@ namespace STK.Formula
         }
 
 
-        private IEvaluable ParseFactor(List<FormulaToken> input, ref int i)
+        private IEvaluable ParseFactor(List<Token> input, ref int i)
         {
             if (i >= input.Count)
                 return null;
 
 
-            FormulaToken token = input[i];
+            Token token = input[i];
 
 
             switch (token.type)
@@ -142,19 +142,19 @@ namespace STK.Formula
         }
 
 
-        protected virtual IEvaluable HandleUnexpectedExpression(List<FormulaToken> input, ref int index, IEvaluable lhs)
+        protected virtual IEvaluable HandleUnexpectedExpression(List<Token> input, ref int index, IEvaluable lhs)
         {
             return lhs;
         }
 
 
-        protected virtual IEvaluable HandleUnexpectedTerm(List<FormulaToken> input, ref int index, IEvaluable lhs)
+        protected virtual IEvaluable HandleUnexpectedTerm(List<Token> input, ref int index, IEvaluable lhs)
         {
             return lhs;
         }
 
 
-        protected virtual IEvaluable HandleUnexpectedFactor(List<FormulaToken> input, ref int index)
+        protected virtual IEvaluable HandleUnexpectedFactor(List<Token> input, ref int index)
         {
             return null;
         }
