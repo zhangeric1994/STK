@@ -7,6 +7,11 @@ namespace STK.Expression
     {
         public MathmaticalExpression Parse(List<Token> input)
         {
+            if (input == null || input.Count == 0)
+            {
+                return MathmaticalExpression.NONE;
+            }
+
             int i = 0;
             return new MathmaticalExpression(ParseExpression(input, ref i));
         }

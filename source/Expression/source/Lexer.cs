@@ -8,13 +8,16 @@ namespace STK.Expression
         public const char VARIABLE_START = '[';
         public const char VARIABLE_END = ']';
 
+        public static readonly char[] TRIMED_CHARACTERS = new char[] { ' ', '\n' };
+
 
         public List<Token> GenerateTokens(string input)
         {
-            List<Token> result;
-            if (GenerateTokens(input, out result))
+            input = input.Trim(TRIMED_CHARACTERS);
+
+            if (!string.IsNullOrEmpty(input) && GenerateTokens(input, out List<Token> tokens))
             {
-                return result;
+                return tokens;
             }
 
             return null;

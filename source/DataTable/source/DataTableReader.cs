@@ -1,7 +1,9 @@
 ﻿using Microsoft.Office.Interop.Excel;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
+using System.Runtime.Serialization;
 
 
 namespace STK.DataTable
@@ -13,8 +15,8 @@ namespace STK.DataTable
         public const char ARRAY_SEPARATOR = ',';
         public const char FIELD_SEPARATOR = ';';
         public const char DESCRIPTOR = '=';
-        public static readonly char[] TRIMED_CHARACTERS = new char[] { ' ', '\n' };
 
+        public static readonly char[] TRIMED_CHARACTERS = new char[] { ' ', '\n' };
         private static readonly Type LIST_TYPE;
 
 
@@ -107,13 +109,21 @@ namespace STK.DataTable
             return ReadField(type, input);
         }
 
-        public dynamic ReadField(Type type, string input)
+        private dynamic ReadField(Type type, string input)
         {
             Type dataTableColumnType = type.GetInterface("IDataTableColumnType");
             if (dataTableColumnType != null)
             {
                 dynamic obj = Activator.CreateInstance(type);
                 dataTableColumnType.GetMethods()[0].Invoke(obj, new object[] { input, 0 });
+
+
+                IEnumerable<MethodInfo> methodInfos = type.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic).Where(f => f.GetCustomAttributes(false).OfType<OnDeserializedAttribute>().Count() > 0);
+                if (methodInfos.Count() > 0)
+                {
+                    methodInfos.First().Invoke(obj, new object[] { null });
+                }
+
 
                 return obj;
             }
@@ -144,7 +154,7 @@ namespace STK.DataTable
         }
 
 
-        public dynamic ReadArrayField(Type type, string input)
+        private dynamic ReadArrayField(Type type, string input)
         {
             Type elementType = type.GetElementType();
 
