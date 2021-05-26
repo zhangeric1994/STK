@@ -26,18 +26,20 @@ namespace STK.DataTable
         }
 
 
-        public object ReadExcelWorksheet(Worksheet worksheet, out Type rowType)
+        public DataTable ReadExcelWorksheet(Worksheet worksheet, out Type rowType)
         {
             Range range = worksheet.UsedRange;
             int columnCount = range.Columns.Count;
+            int rowCount = range.Rows.Count;
 
 
             rowType = null;
             dynamic dataTable = null;
             List<FieldInfo> columnInfos = null;
-            
-            foreach (Range row in range.Rows)
+
+            for (int r = 1; r <= rowCount; ++r)
             {
+                Range row = range.Rows[r];
                 string rowDefinition = row.Cells[1, 1].Value?.Trim(TRIMED_CHARACTERS) ?? "";
 
                 if (columnInfos == null)
@@ -49,7 +51,7 @@ namespace STK.DataTable
                             case "TABLE_TYPE":
                                 Type dataTableType = GetType(row.Cells[1, 2].Value);
                                 rowType = dataTableType.BaseType.GenericTypeArguments[0];
-                                dataTable = Activator.CreateInstance(dataTableType);
+                                dataTable = Activator.CreateInstance(dataTableType, new object[] { worksheet.Name });
                                 break;
 
 
@@ -71,7 +73,7 @@ namespace STK.DataTable
                 }
                 else if (string.IsNullOrEmpty(rowDefinition))
                 {
-                    dynamic dataTableRow = ReadRow(rowType, row, columnInfos);
+                    dynamic dataTableRow = ReadRow(rowType, row, columnInfos, dataTable, new DataTableRow.Metadata(r));
                     dataTable.AddRow(dataTableRow);
                 }
             }
@@ -80,9 +82,9 @@ namespace STK.DataTable
             return dataTable;
         }
 
-        public dynamic ReadRow(Type rowType, Range input, List<FieldInfo> columnInfos)
+        private dynamic ReadRow(Type rowType, Range input, List<FieldInfo> columnInfos, DataTable dataTable, DataTableRow.Metadata metadata)
         {
-            dynamic dataTableRow = Activator.CreateInstance(rowType);
+            dynamic dataTableRow = Activator.CreateInstance(rowType, new object[] { dataTable, metadata });
 
             
             for (int c = 2; c < columnInfos.Count; ++c)

@@ -47,6 +47,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="source\DataTableManager.cs" />
     <Compile Include="source\DataTable.cs" />
     <Compile Include="source\DataTableReader.cs" />
     <Compile Include="source\DataTableRow.cs" />
