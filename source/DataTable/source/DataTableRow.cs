@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using System.Collections.Generic;
 
 
 namespace STK.DataTable
@@ -52,12 +53,32 @@ namespace STK.DataTable
     }
 
 
-    [JsonObject()]
-    public abstract class DictionaryDataTableRow<T> : DataTableRow
+    [JsonObject]
+    public abstract class DictionaryDataTableRow<KeyType> : DataTableRow
     {
-        public abstract T Key { get; }
+        [JsonIgnore]
+        public abstract KeyType Key { get; }
 
 
         public DictionaryDataTableRow(DataTable dataTable, Metadata metadata) : base(dataTable, metadata) { }
+    }
+
+
+    [JsonObject]
+    public abstract class DictionaryDataTableRow<KeyType1, KeyType2> : DataTableRow
+    {
+        [JsonIgnore]
+        public abstract KeyType1 Key1 { get; }
+        [JsonIgnore]
+        public abstract KeyType2 Key2 { get; }
+
+
+        public DictionaryDataTableRow(DataTable dataTable, Metadata metadata) : base(dataTable, metadata) { }
+    }
+
+
+    public interface ICustomExcelReading
+    {
+        void GenerateFromSource(Dictionary<string, object> input);
     }
 }

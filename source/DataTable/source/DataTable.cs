@@ -42,20 +42,6 @@ namespace STK.DataTable
     [JsonObject]
     public abstract class DataTable<RowType> : DataTable where RowType : DataTableRow
     {
-        [JsonIgnore]
-        public abstract IEnumerable<RowType> Rows { get; }
-
-
-        public DataTable(string name) : base(name) { }
-
-
-        internal abstract void AddRow(RowType row);
-    }
-
-
-    [JsonObject]
-    public abstract class ListDataTable<RowType> : DataTable<RowType> where RowType : DataTableRow
-    {
         [JsonProperty]
         protected List<RowType> rows = new List<RowType>();
 
@@ -65,16 +51,16 @@ namespace STK.DataTable
         [JsonIgnore]
         public override int Count => rows.Count;
         [JsonIgnore]
-        public override IEnumerable<RowType> Rows => rows;
+        public virtual IEnumerable<RowType> Rows => rows;
 
 
-        public ListDataTable(string name) : base(name) { }
+        public DataTable(string name) : base(name) { }
 
 
         public override T GetDataByID<T>(int id) => rows[id - 1] as T;
 
 
-        internal override void AddRow(RowType row)
+        internal virtual void AddRow(RowType row)
         {
             rows.Add(row);
         }
@@ -82,7 +68,7 @@ namespace STK.DataTable
 
 
     [JsonObject]
-    public abstract class DictionaryDataTable<RowType, KeyType> : ListDataTable<RowType> where RowType : DictionaryDataTableRow<KeyType>
+    public abstract class DictionaryDataTable<RowType, KeyType> : DataTable<RowType> where RowType : DictionaryDataTableRow<KeyType>
     {
         [JsonIgnore]
         protected Dictionary<KeyType, RowType> rowDictionary = new Dictionary<KeyType, RowType>();
@@ -101,6 +87,118 @@ namespace STK.DataTable
             foreach (RowType row in rows)
             {
                 rowDictionary.Add(row.Key, row);
+            }
+        }
+    }
+
+
+    [JsonObject]
+    public abstract class DictionaryDataTable<RowType, KeyType1, KeyType2> : DataTable<RowType> where RowType : DictionaryDataTableRow<KeyType1, KeyType2>
+    {
+        [JsonIgnore]
+        protected Dictionary<KeyType1, Dictionary<KeyType2, RowType>> rowDictionary = new Dictionary<KeyType1, Dictionary<KeyType2, RowType>>();
+
+
+        [JsonIgnore]
+        public RowType this[KeyType1 key1, KeyType2 key2] => rowDictionary[key1][key2];
+
+
+        public DictionaryDataTable(string name) : base(name) { }
+
+
+        [OnDeserialized]
+        private void OnDeserialized(StreamingContext context)
+        {
+            foreach (RowType row in rows)
+            {
+                KeyType1 key1 = row.Key1;
+
+                if (!rowDictionary.ContainsKey(key1))
+                {
+                    rowDictionary.Add(key1, new Dictionary<KeyType2, RowType>() { { row.Key2, row } });
+                }
+                else
+                {
+                    rowDictionary[key1].Add(row.Key2, row);
+                }
+            }
+        }
+    }
+
+
+    [JsonObject]
+    public abstract class CatagorizedDataTable<RowType, KeyType> : DataTable<RowType> where RowType : DictionaryDataTableRow<KeyType>
+    {
+        [JsonIgnore]
+        protected Dictionary<KeyType, List<RowType>> rowDictionary = new Dictionary<KeyType, List<RowType>>();
+
+
+        [JsonIgnore]
+        public List<RowType> this[KeyType key] => rowDictionary[key];
+
+
+        public CatagorizedDataTable(string name) : base(name) { }
+
+
+        [OnDeserialized]
+        private void OnDeserialized(StreamingContext context)
+        {
+            foreach (RowType row in rows)
+            {
+                KeyType key = row.Key;
+
+                if (!rowDictionary.ContainsKey(key))
+                {
+                    rowDictionary.Add(key, new List<RowType>() { { row } });
+                }
+                else
+                {
+                    rowDictionary[key].Add(row);
+                }
+            }
+        }
+    }
+
+
+    [JsonObject]
+    public abstract class CatagorizedDataTable<RowType, KeyType1, KeyType2> : DataTable<RowType> where RowType : DictionaryDataTableRow<KeyType1, KeyType2>
+    {
+        [JsonIgnore]
+        protected Dictionary<KeyType1, Dictionary<KeyType2, List<RowType>>> rowDictionary = new Dictionary<KeyType1, Dictionary<KeyType2, List<RowType>>>();
+
+
+        [JsonIgnore]
+        public List<RowType> this[KeyType1 catagory1, KeyType2 catagory2] => rowDictionary[catagory1][catagory2];
+
+
+        public CatagorizedDataTable(string name) : base(name) { }
+
+
+        [OnDeserialized]
+        private void OnDeserialized(StreamingContext context)
+        {
+            foreach (RowType row in rows)
+            {
+                KeyType1 key1 = row.Key1;
+
+                if (!rowDictionary.ContainsKey(key1))
+                {
+                    rowDictionary.Add(key1, new Dictionary<KeyType2, List<RowType>>() { { row.Key2, new List<RowType>() { row } } });
+                }
+                else
+                {
+                    Dictionary<KeyType2, List<RowType>> dictionary = rowDictionary[key1];
+                    KeyType2 key2 = row.Key2;
+
+                    if (!dictionary.ContainsKey(key2))
+                    {
+                        dictionary.Add(key2, new List<RowType>() { row });
+                    }
+                    else
+                    {
+                        dictionary[key2].Add(row);
+                    }
+                }
             }
         }
     }

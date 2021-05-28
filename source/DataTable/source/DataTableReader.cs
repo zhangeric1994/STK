@@ -35,46 +35,104 @@ namespace STK.DataTable
 
             rowType = null;
             dynamic dataTable = null;
-            List<FieldInfo> columnInfos = null;
+            Type customExcelReadingInterface = null;
 
-            for (int r = 1; r <= rowCount; ++r)
+
+            int r = 1;
+
+            for (; r <= rowCount; ++r)
             {
                 Range row = range.Rows[r];
-                string rowDefinition = row.Cells[1, 1].Value?.Trim(TRIMED_CHARACTERS) ?? "";
+                string rowDefinition = row.Cells[1, 1].MergeArea.Cells[1,1].Value?.Trim(TRIMED_CHARACTERS) ?? "";
 
-                if (columnInfos == null)
+                if (rowDefinition.StartsWith("###") && rowDefinition.Substring(3).TrimStart(TRIMED_CHARACTERS).ToUpper() == "TABLE_TYPE")
                 {
-                    if (rowDefinition.StartsWith("###"))
+                    Type dataTableType = GetType(row.Cells[1, 2].MergeArea.Cells[1,1].Value);
+                    rowType = dataTableType.BaseType.GenericTypeArguments[0];
+                    dataTable = Activator.CreateInstance(dataTableType, new object[] { worksheet.Name });
+                    customExcelReadingInterface = rowType.GetInterface("ICustomExcelReading");
+                    break;
+                }
+            }
+
+
+            bool hasColumnInfos = false;
+
+            for (; r <= rowCount; ++r)
+            {
+                Range row = range.Rows[r];
+                string rowDefinition = row.Cells[1, 1].MergeArea.Cells[1,1].Value?.Trim(TRIMED_CHARACTERS) ?? "";
+
+                if (rowDefinition.StartsWith("###") && rowDefinition.Substring(3).TrimStart(TRIMED_CHARACTERS).ToUpper() == "FIELD_NAME")
+                {
+                    hasColumnInfos = true;
+                    break;
+                }
+            }
+
+            if (!hasColumnInfos)
+            {
+                throw new Exception();
+            }
+
+
+            if (customExcelReadingInterface == null)
+            {
+                Range row = range.Rows[r];
+
+                List<FieldInfo> columnInfos = new List<FieldInfo> { null, null };
+                for (int c = 2; c <= columnCount; ++c)
+                {
+                    columnInfos.Add(rowType.GetField(row.Cells[1, c].MergeArea.Cells[1,1].Value.Trim(TRIMED_CHARACTERS), BindingFlags.IgnoreCase | BindingFlags.NonPublic | BindingFlags.Instance));
+                }
+
+
+                for (; r <= rowCount; ++r)
+                {
+                    row = range.Rows[r];
+
+                    if (string.IsNullOrEmpty(row.Cells[1, 1].MergeArea.Cells[1,1].Value))
                     {
-                        switch (rowDefinition.Substring(3).Trim(TRIMED_CHARACTERS).ToUpper())
-                        {
-                            case "TABLE_TYPE":
-                                Type dataTableType = GetType(row.Cells[1, 2].Value);
-                                rowType = dataTableType.BaseType.GenericTypeArguments[0];
-                                dataTable = Activator.CreateInstance(dataTableType, new object[] { worksheet.Name });
-                                break;
-
-
-                            case "FIELD_NAME":
-                                if (rowType == null)
-                                {
-                                    throw new Exception();
-                                }
-
-                                columnInfos = new List<FieldInfo> { null, null };
-                                for (int c = 2; c <= columnCount; ++c)
-                                {
-                                    columnInfos.Add(rowType.GetField(row.Cells[1, c].Value, BindingFlags.IgnoreCase | BindingFlags.NonPublic | BindingFlags.Instance));
-                                }
-
-                                break;
-                        }
+                        dataTable.AddRow(ReadExcelRow(rowType, row, columnInfos, dataTable, new DataTableRow.Metadata(r)));
                     }
                 }
-                else if (string.IsNullOrEmpty(rowDefinition))
+            }
+            else
+            {
+                MethodInfo readRowMethodInfo = customExcelReadingInterface.GetMethods()[0];
+
+
+                Dictionary<string, object> arg = new Dictionary<string, object>();
+                Range row = range.Rows[r];
+
+                List<string> columnInfos = new List<string> { null, null };
+                for (int c = 2; c <= columnCount; ++c)
                 {
-                    dynamic dataTableRow = ReadRow(rowType, row, columnInfos, dataTable, new DataTableRow.Metadata(r));
-                    dataTable.AddRow(dataTableRow);
+                    string columnInfo = row.Cells[1, c].MergeArea.Cells[1,1].Value.Trim(TRIMED_CHARACTERS);
+                    columnInfos.Add(columnInfo);
+                    arg.Add(columnInfo, "");
+                }
+
+
+                for (; r <= rowCount; ++r)
+                {
+                    row = range.Rows[r];
+
+                    if (string.IsNullOrEmpty(row.Cells[1, 1].MergeArea.Cells[1,1].Value))
+                    {
+                        dynamic dataTableRow = Activator.CreateInstance(rowType, new object[] { dataTable, new DataTableRow.Metadata(r) });
+
+
+                        for (int c = 2; c <= columnCount; ++c)
+                        {
+                            arg[columnInfos[c]] = row.Cells[1, c].MergeArea.Cells[1,1].Value;
+                        }
+                        
+                        readRowMethodInfo.Invoke(dataTableRow, new object[] { arg });
+
+
+                        dataTable.AddRow(dataTableRow);
+                    }
                 }
             }
 
@@ -82,15 +140,48 @@ namespace STK.DataTable
             return dataTable;
         }
 
-        private dynamic ReadRow(Type rowType, Range input, List<FieldInfo> columnInfos, DataTable dataTable, DataTableRow.Metadata metadata)
+
+        private dynamic ReadExcelRow(Type rowType, Range input, List<FieldInfo> columnInfos, DataTable dataTable, DataTableRow.Metadata metadata)
         {
             dynamic dataTableRow = Activator.CreateInstance(rowType, new object[] { dataTable, metadata });
 
-            
+
             for (int c = 2; c < columnInfos.Count; ++c)
             {
                 FieldInfo columnInfo = columnInfos[c];
-                columnInfo.SetValue(dataTableRow, ReadString(columnInfo.FieldType, input.Cells[1, c].Value));
+                Type columnType = columnInfo.FieldType;
+                dynamic value = input.Cells[1, c].MergeArea.Cells[1,1].Value;
+
+                if (value is string)
+                {
+                    columnInfo.SetValue(dataTableRow, ReadString(columnType, value));
+                }
+                else
+                {
+                    if (value.GetType() == columnType)
+                    {
+                        columnInfo.SetValue(dataTableRow, value);
+                    }
+                    else if (value is double)
+                    {
+                        if (columnType == typeof(int))
+                        {
+                            columnInfo.SetValue(dataTableRow, (int)(double)value);
+                        }
+                        else if (columnType == typeof(float))
+                        {
+                            columnInfo.SetValue(dataTableRow, (float)(double)value);
+                        }
+                        else
+                        {
+                            throw new Exception();
+                        }
+                    }
+                    else
+                    {
+                        throw new Exception();
+                    }
+                }
             }
 
 
@@ -104,20 +195,24 @@ namespace STK.DataTable
 
             if (type.IsArray)
             {
-                return ReadArrayField(type, input.Trim(ARRAY_START, ARRAY_END));
+                return ReadArray(type, input.Trim(ARRAY_START, ARRAY_END));
             }
 
 
-            return ReadField(type, input);
+            return ReadVariable(type, input.Trim(ARRAY_START, ARRAY_END));
         }
 
-        private dynamic ReadField(Type type, string input)
+
+        protected virtual Type GetType(string name) => Type.GetType(name, true, true);
+
+
+        private dynamic ReadVariable(Type type, string input)
         {
-            Type dataTableColumnType = type.GetInterface("IDataTableColumnType");
-            if (dataTableColumnType != null)
+            Type dataTableColumnInterface = type.GetInterface("IDataTableColumnType");
+            if (dataTableColumnInterface != null)
             {
                 dynamic obj = Activator.CreateInstance(type);
-                dataTableColumnType.GetMethods()[0].Invoke(obj, new object[] { input, 0 });
+                dataTableColumnInterface.GetMethods()[0].Invoke(obj, new object[] { input, 0 });
 
 
                 IEnumerable<MethodInfo> methodInfos = type.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic).Where(f => f.GetCustomAttributes(false).OfType<OnDeserializedAttribute>().Count() > 0);
@@ -155,8 +250,7 @@ namespace STK.DataTable
             throw new Exception();
         }
 
-
-        private dynamic ReadArrayField(Type type, string input)
+        private dynamic ReadArray(Type type, string input)
         {
             Type elementType = type.GetElementType();
 
@@ -187,7 +281,7 @@ namespace STK.DataTable
                             }
 
                             ++i;
-                            list.Add(ReadArrayField(elementType, input.Substring(i, j - i)));
+                            list.Add(ReadArray(elementType, input.Substring(i, j - i)));
 
 
                             for (i = j + 1; input[i] != ARRAY_SEPARATOR; ++i) { }
@@ -239,14 +333,11 @@ namespace STK.DataTable
             object[] array = new object[N];
             for (int i = 0; i < N; ++i)
             {
-                array[i] = ReadField(elementType, splitedInput[i]);
+                array[i] = ReadVariable(elementType, splitedInput[i]);
             }
 
 
             return null;
         }
-
-
-        protected virtual Type GetType(string name) => Type.GetType(name, true, true);
     }
 }
