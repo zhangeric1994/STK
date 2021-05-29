@@ -77,7 +77,7 @@ namespace STK.DataTable
     }
 
 
-    public interface ICustomExcelReading
+    public interface ICustomExcelRowReading
     {
         void GenerateFromSource(Dictionary<string, object> input);
     }
