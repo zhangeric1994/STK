@@ -10,6 +10,15 @@ namespace STK.DataTable
 {
     public class DataTableReader
     {
+        private class ColumnInfo
+        {
+            public readonly FieldInfo fieldInfo;
+            public readonly Type type;
+            public readonly int startIndex;
+            public readonly int width;
+        }
+
+
         public const char ARRAY_START = '[';
         public const char ARRAY_END = ']';
         public const char ARRAY_SEPARATOR = ',';
@@ -18,11 +27,19 @@ namespace STK.DataTable
 
         public static readonly char[] TRIMED_CHARACTERS = new char[] { ' ', '\n' };
         private static readonly Type LIST_TYPE;
+        private static readonly string ICUSTOMEXCELROWREADING_INTERFACE;
+        private static readonly string IDATATABLECOLUMNTYPE_INTERFACE;
+        private static readonly MethodInfo ICUSTOMEXCELROWREADING_GENERATEFROMSOURCE;
+        private static readonly MethodInfo IDATATABLECOLUMNTYPE_GENERATEFROMSOURCE;
 
 
         static DataTableReader()
         {
             LIST_TYPE = typeof(List<>);
+            ICUSTOMEXCELROWREADING_INTERFACE = typeof(ICustomExcelRowReading).Name;
+            IDATATABLECOLUMNTYPE_INTERFACE = typeof(IDataTableColumnType).Name;
+            ICUSTOMEXCELROWREADING_GENERATEFROMSOURCE = typeof(ICustomExcelRowReading).GetMethods()[0];
+            IDATATABLECOLUMNTYPE_GENERATEFROMSOURCE = typeof(IDataTableColumnType).GetMethods()[0];
         }
 
 
@@ -43,14 +60,14 @@ namespace STK.DataTable
             for (; r <= rowCount; ++r)
             {
                 Range row = range.Rows[r];
-                string rowDefinition = row.Cells[1, 1].MergeArea.Cells[1,1].Value?.Trim(TRIMED_CHARACTERS) ?? "";
+                string rowDefinition = GetExcelCellValue(row, 1, 1)?.Trim(TRIMED_CHARACTERS) ?? "";
 
                 if (rowDefinition.StartsWith("###") && rowDefinition.Substring(3).TrimStart(TRIMED_CHARACTERS).ToUpper() == "TABLE_TYPE")
                 {
-                    Type dataTableType = GetType(row.Cells[1, 2].MergeArea.Cells[1,1].Value);
+                    Type dataTableType = GetType(GetExcelCellValue(row, 1, 2));
                     rowType = dataTableType.BaseType.GenericTypeArguments[0];
                     dataTable = Activator.CreateInstance(dataTableType, new object[] { worksheet.Name });
-                    customExcelReadingInterface = rowType.GetInterface("ICustomExcelReading");
+                    customExcelReadingInterface = rowType.GetInterface(ICUSTOMEXCELROWREADING_INTERFACE);
                     break;
                 }
             }
@@ -61,7 +78,7 @@ namespace STK.DataTable
             for (; r <= rowCount; ++r)
             {
                 Range row = range.Rows[r];
-                string rowDefinition = row.Cells[1, 1].MergeArea.Cells[1,1].Value?.Trim(TRIMED_CHARACTERS) ?? "";
+                string rowDefinition = GetExcelCellValue(row, 1, 1)?.Trim(TRIMED_CHARACTERS) ?? "";
 
                 if (rowDefinition.StartsWith("###") && rowDefinition.Substring(3).TrimStart(TRIMED_CHARACTERS).ToUpper() == "FIELD_NAME")
                 {
@@ -83,7 +100,7 @@ namespace STK.DataTable
                 List<FieldInfo> columnInfos = new List<FieldInfo> { null, null };
                 for (int c = 2; c <= columnCount; ++c)
                 {
-                    columnInfos.Add(rowType.GetField(row.Cells[1, c].MergeArea.Cells[1,1].Value.Trim(TRIMED_CHARACTERS), BindingFlags.IgnoreCase | BindingFlags.NonPublic | BindingFlags.Instance));
+                    columnInfos.Add(rowType.GetField(GetExcelCellValue(row, 1, c).Trim(TRIMED_CHARACTERS), BindingFlags.IgnoreCase | BindingFlags.NonPublic | BindingFlags.Instance));
                 }
 
 
@@ -91,7 +108,7 @@ namespace STK.DataTable
                 {
                     row = range.Rows[r];
 
-                    if (string.IsNullOrEmpty(row.Cells[1, 1].MergeArea.Cells[1,1].Value))
+                    if (string.IsNullOrEmpty(GetExcelCellValue(row, 1, 1)))
                     {
                         dataTable.AddRow(ReadExcelRow(rowType, row, columnInfos, dataTable, new DataTableRow.Metadata(r)));
                     }
@@ -99,16 +116,13 @@ namespace STK.DataTable
             }
             else
             {
-                MethodInfo readRowMethodInfo = customExcelReadingInterface.GetMethods()[0];
-
-
                 Dictionary<string, object> arg = new Dictionary<string, object>();
                 Range row = range.Rows[r];
 
                 List<string> columnInfos = new List<string> { null, null };
                 for (int c = 2; c <= columnCount; ++c)
                 {
-                    string columnInfo = row.Cells[1, c].MergeArea.Cells[1,1].Value.Trim(TRIMED_CHARACTERS);
+                    string columnInfo = GetExcelCellValue(row, 1, c).Trim(TRIMED_CHARACTERS);
                     columnInfos.Add(columnInfo);
                     arg.Add(columnInfo, "");
                 }
@@ -118,17 +132,17 @@ namespace STK.DataTable
                 {
                     row = range.Rows[r];
 
-                    if (string.IsNullOrEmpty(row.Cells[1, 1].MergeArea.Cells[1,1].Value))
+                    if (string.IsNullOrEmpty(GetExcelCellValue(row, 1, 1)))
                     {
                         dynamic dataTableRow = Activator.CreateInstance(rowType, new object[] { dataTable, new DataTableRow.Metadata(r) });
 
 
                         for (int c = 2; c <= columnCount; ++c)
                         {
-                            arg[columnInfos[c]] = row.Cells[1, c].MergeArea.Cells[1,1].Value;
+                            arg[columnInfos[c]] = GetExcelCellValue(row, 1, c);
                         }
-                        
-                        readRowMethodInfo.Invoke(dataTableRow, new object[] { arg });
+
+                        ICUSTOMEXCELROWREADING_GENERATEFROMSOURCE.Invoke(dataTableRow, new object[] { arg });
 
 
                         dataTable.AddRow(dataTableRow);
@@ -141,6 +155,155 @@ namespace STK.DataTable
         }
 
 
+        public dynamic Parse(Type type, string input)
+        {
+            input = input.Trim(TRIMED_CHARACTERS);
+
+
+            if (type.IsArray)
+            {
+                return ParseArray(type, input.Trim(ARRAY_START, ARRAY_END));
+            }
+
+
+            return ParseObject(type, input.Trim(ARRAY_START, ARRAY_END));
+        }
+
+        public dynamic ParseObject(Type type, string input)
+        {
+            Type dataTableColumnInterface = type.GetInterface(IDATATABLECOLUMNTYPE_INTERFACE);
+            if (dataTableColumnInterface != null)
+            {
+                dynamic obj = Activator.CreateInstance(type);
+                IDATATABLECOLUMNTYPE_GENERATEFROMSOURCE.Invoke(obj, new object[] { input, -1 });
+
+                return obj;
+            }
+
+
+            if (type.IsEnum)
+            {
+                return Enum.Parse(type, input, true);
+            }
+
+            if (type.Equals(typeof(int)))
+            {
+                return int.Parse(input);
+            }
+
+            if (type.Equals(typeof(float)))
+            {
+                return float.Parse(input);
+            }
+
+            if (type.Equals(typeof(bool)))
+            {
+                return bool.Parse(input);
+            }
+
+            if (type.Equals(typeof(string)))
+            {
+                return input.ToString();
+            }
+
+
+            throw new Exception();
+        }
+
+        public dynamic ParseArray(Type type, string input)
+        {
+            Type elementType = type.GetElementType();
+
+
+            if (elementType.IsArray)
+            {
+                dynamic list = Activator.CreateInstance(LIST_TYPE.MakeGenericType(elementType));
+                for (int i = 0; i != -1 && i < input.Length; ++i)
+                {
+                    char c = input[i];
+                    if (c != ' ' && c != '\n')
+                    {
+                        if (c == ARRAY_SEPARATOR)
+                        {
+                            list.Add(null);
+                        }
+                        else
+                        {
+                            if (c != ARRAY_START)
+                            {
+                                throw new Exception();
+                            }
+
+                            int j = input.IndexOf(ARRAY_END, i);
+                            if (j == -1)
+                            {
+                                throw new Exception();
+                            }
+
+                            ++i;
+                            list.Add(ParseArray(elementType, input.Substring(i, j - i)));
+
+
+                            for (i = j + 1; input[i] != ARRAY_SEPARATOR; ++i) { }
+                        }
+                    }
+                }
+
+                return list.ToArray();
+            }
+
+
+            Type dataTableColumnInterface = elementType.GetInterface(IDATATABLECOLUMNTYPE_INTERFACE);
+            if (dataTableColumnInterface != null)
+            {
+                dynamic list = Activator.CreateInstance(LIST_TYPE.MakeGenericType(elementType));
+                for (int i = 0; i < input.Length; ++i)
+                {
+                    char c = input[i];
+                    if (c != ' ' && c != '\n')
+                    {
+                        if (c == ARRAY_SEPARATOR)
+                        {
+                            list.Add(null);
+                        }
+                        else
+                        {
+                            dynamic obj = Activator.CreateInstance(elementType);
+                            list.Add(obj);
+
+                            i = (int)IDATATABLECOLUMNTYPE_GENERATEFROMSOURCE.Invoke(obj, new object[] { input, i }) + 1;
+                        }
+                    }
+                }
+
+                return list.ToArray();
+            }
+
+
+            string[] splitedInput = input.Split(ARRAY_SEPARATOR);
+            if (elementType.Equals(typeof(string)))
+            {
+                return splitedInput;
+            }
+
+
+            int N = splitedInput.Length;
+            object[] array = new object[N];
+            for (int i = 0; i < N; ++i)
+            {
+                array[i] = ParseObject(elementType, splitedInput[i]);
+            }
+
+
+            return null;
+        }
+
+
+        protected virtual Type GetType(string name) => Type.GetType(name, true, true);
+
+        protected virtual dynamic GetExcelCellValue(Range range, int row, int column) => range.Cells[row, column].MergeArea.Cells[1, 1].Value;
+
+
         private dynamic ReadExcelRow(Type rowType, Range input, List<FieldInfo> columnInfos, DataTable dataTable, DataTableRow.Metadata metadata)
         {
             dynamic dataTableRow = Activator.CreateInstance(rowType, new object[] { dataTable, metadata });
@@ -150,11 +313,11 @@ namespace STK.DataTable
             {
                 FieldInfo columnInfo = columnInfos[c];
                 Type columnType = columnInfo.FieldType;
-                dynamic value = input.Cells[1, c].MergeArea.Cells[1,1].Value;
+                dynamic value = GetExcelCellValue(input, 1, c);
 
                 if (value is string)
                 {
-                    columnInfo.SetValue(dataTableRow, ReadString(columnType, value));
+                    columnInfo.SetValue(dataTableRow, Parse(columnType, value));
                 }
                 else
                 {
@@ -186,158 +349,6 @@ namespace STK.DataTable
 
 
             return dataTableRow;
-        }
-
-        public dynamic ReadString(Type type, string input)
-        {
-            input = input.Trim(TRIMED_CHARACTERS);
-
-
-            if (type.IsArray)
-            {
-                return ReadArray(type, input.Trim(ARRAY_START, ARRAY_END));
-            }
-
-
-            return ReadVariable(type, input.Trim(ARRAY_START, ARRAY_END));
-        }
-
-
-        protected virtual Type GetType(string name) => Type.GetType(name, true, true);
-
-
-        private dynamic ReadVariable(Type type, string input)
-        {
-            Type dataTableColumnInterface = type.GetInterface("IDataTableColumnType");
-            if (dataTableColumnInterface != null)
-            {
-                dynamic obj = Activator.CreateInstance(type);
-                dataTableColumnInterface.GetMethods()[0].Invoke(obj, new object[] { input, 0 });
-
-
-                IEnumerable<MethodInfo> methodInfos = type.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic).Where(f => f.GetCustomAttributes(false).OfType<OnDeserializedAttribute>().Count() > 0);
-                if (methodInfos.Count() > 0)
-                {
-                    methodInfos.First().Invoke(obj, new object[] { null });
-                }
-
-
-                return obj;
-            }
-
-
-            if (type.Equals(typeof(int)))
-            {
-                return int.Parse(input);
-            }
-
-            if (type.Equals(typeof(float)))
-            {
-                return float.Parse(input);
-            }
-
-            if (type.Equals(typeof(bool)))
-            {
-                return bool.Parse(input);
-            }
-
-            if (type.Equals(typeof(string)))
-            {
-                return input;
-            }
-
-
-            throw new Exception();
-        }
-
-        private dynamic ReadArray(Type type, string input)
-        {
-            Type elementType = type.GetElementType();
-
-
-            if (elementType.IsArray)
-            {
-                dynamic list = Activator.CreateInstance(LIST_TYPE.MakeGenericType(elementType));
-                for (int i = 0; i != -1 && i < input.Length; ++i)
-                {
-                    char c = input[i];
-                    if (c != ' ' && c != '\n')
-                    {
-                        if (c == ARRAY_SEPARATOR)
-                        {
-                            list.Add(null);
-                        }
-                        else
-                        {
-                            if (c != ARRAY_START)
-                            {
-                                throw new Exception();
-                            }
-
-                            int j = input.IndexOf(ARRAY_END, i);
-                            if (j == -1)
-                            {
-                                throw new Exception();
-                            }
-
-                            ++i;
-                            list.Add(ReadArray(elementType, input.Substring(i, j - i)));
-
-
-                            for (i = j + 1; input[i] != ARRAY_SEPARATOR; ++i) { }
-                        }
-                    }
-                }
-
-                return list.ToArray();
-            }
-
-
-            Type dataTableColumnType = elementType.GetInterface("IDataTableColumnType");
-            if (dataTableColumnType != null)
-            {
-                MethodInfo generateFromSourceMethodInfo = dataTableColumnType.GetMethods()[0];
-
-                dynamic list = Activator.CreateInstance(LIST_TYPE.MakeGenericType(elementType));
-                for (int i = 0; i < input.Length; ++i)
-                {
-                    char c = input[i];
-                    if (c != ' ' && c != '\n')
-                    {
-                        if (c == ARRAY_SEPARATOR)
-                        {
-                            list.Add(null);
-                        }
-                        else
-                        {
-                            dynamic obj = Activator.CreateInstance(elementType);
-                            list.Add(obj);
-
-                            i = (int)generateFromSourceMethodInfo.Invoke(obj, new object[] { input, i }) + 1;
-                        }
-                    }
-                }
-
-                return list.ToArray();
-            }
-
-
-            string[] splitedInput = input.Split(ARRAY_SEPARATOR);
-            if (elementType.Equals(typeof(string)))
-            {
-                return splitedInput;
-            }
-
-
-            int N = splitedInput.Length;
-            object[] array = new object[N];
-            for (int i = 0; i < N; ++i)
-            {
-                array[i] = ReadVariable(elementType, splitedInput[i]);
-            }
-
-
-            return null;
         }
     }
 }

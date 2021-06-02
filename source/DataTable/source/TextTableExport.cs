@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 
 
-namespace STK.Text
+namespace STK.DataTable
 {
     public sealed class TextTableExport
     {

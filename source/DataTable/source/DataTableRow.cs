@@ -65,10 +65,8 @@ namespace STK.DataTable
 
 
     [JsonObject]
-    public abstract class DictionaryDataTableRow<KeyType1, KeyType2> : DataTableRow
+    public abstract class DictionaryDataTableRow<KeyType1, KeyType2> : DictionaryDataTableRow<KeyType1>
     {
-        [JsonIgnore]
-        public abstract KeyType1 Key1 { get; }
         [JsonIgnore]
         public abstract KeyType2 Key2 { get; }
 

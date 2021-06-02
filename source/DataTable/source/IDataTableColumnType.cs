@@ -2,6 +2,6 @@
 {
     public interface IDataTableColumnType
     {
-        int GenerateFromSource(string input, int leftIndex = 0);
+        int GenerateFromSource(string input, int leftIndex = -1);
     }
 }

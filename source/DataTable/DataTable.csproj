@@ -52,6 +52,9 @@
     <Compile Include="source\DataTableReader.cs" />
     <Compile Include="source\DataTableRow.cs" />
     <Compile Include="source\IDataTableColumnType.cs" />
+    <Compile Include="source\TextFormatter.cs" />
+    <Compile Include="source\TextManager.cs" />
+    <Compile Include="source\TextTableExport.cs" />
   </ItemGroup>
   <ItemGroup>
     <COMReference Include="Microsoft.Office.Core">

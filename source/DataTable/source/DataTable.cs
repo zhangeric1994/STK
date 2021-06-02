@@ -111,7 +111,7 @@ namespace STK.DataTable
         {
             foreach (RowType row in rows)
             {
-                KeyType1 key1 = row.Key1;
+                KeyType1 key1 = row.Key;
 
                 if (!rowDictionary.ContainsKey(key1))
                 {
@@ -179,7 +179,7 @@ namespace STK.DataTable
         {
             foreach (RowType row in rows)
             {
-                KeyType1 key1 = row.Key1;
+                KeyType1 key1 = row.Key;
 
                 if (!rowDictionary.ContainsKey(key1))
                 {

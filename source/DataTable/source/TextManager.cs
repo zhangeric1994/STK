@@ -3,7 +3,7 @@ using System.IO;
 using System.Collections.Generic;
 
 
-namespace STK.Text
+namespace STK.DataTable
 {
     public sealed class Text
     {
@@ -25,7 +25,7 @@ namespace STK.Text
         public static implicit operator string(Text text) => text.ToString();
 
 
-        public override string ToString() => buffer.Substring(startIndex, length);
+        public override string ToString() => startIndex == -1 ? string.Format("{ {0}? }", Key) : buffer.Substring(startIndex, length);
     }
 
 
@@ -46,14 +46,14 @@ namespace STK.Text
         public string CurrentLanguage { get; private set; } = "";
 
 
-        public string GetText(string name)
+        public Text GetText(string name)
         {
             if (dictionary.TryGetValue(name, out Text text))
             {
                 return text;
             }
 
-            return "{ " + name + "? }";
+            return new Text(name);
         }
 
 
@@ -148,7 +148,6 @@ namespace STK.Text
 
 
                     CurrentLanguage = language;
-
 
                     
                     for (current = textHead; current != null; current = current.next)
