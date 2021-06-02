@@ -16,6 +16,18 @@ namespace STK.DataTable
             public readonly Type type;
             public readonly int startIndex;
             public readonly int width;
+
+
+            public ColumnInfo(Type rowType, Range row, int column)
+            {
+                Range mergeArea = row.Cells[1, column].MergeArea;
+                dynamic v = mergeArea.Cells[1, 1].Value;
+
+                fieldInfo = rowType.GetField(mergeArea.Cells[1, 1].Value.Trim(TRIMED_CHARACTERS), BindingFlags.IgnoreCase | BindingFlags.NonPublic | BindingFlags.Instance);
+                type = fieldInfo.FieldType;
+                startIndex = column;
+                width = mergeArea.Columns.Count;
+            }
         }
 
 
@@ -57,6 +69,9 @@ namespace STK.DataTable
 
             int r = 1;
 
+
+            bool hasTableType = false;
+
             for (; r <= rowCount; ++r)
             {
                 Range row = range.Rows[r];
@@ -68,17 +83,20 @@ namespace STK.DataTable
                     rowType = dataTableType.BaseType.GenericTypeArguments[0];
                     dataTable = Activator.CreateInstance(dataTableType, new object[] { worksheet.Name });
                     customExcelReadingInterface = rowType.GetInterface(ICUSTOMEXCELROWREADING_INTERFACE);
+                    hasTableType = true;
                     break;
                 }
             }
+
+            if (!hasTableType)
+                return null;
 
 
             bool hasColumnInfos = false;
 
             for (; r <= rowCount; ++r)
             {
-                Range row = range.Rows[r];
-                string rowDefinition = GetExcelCellValue(row, 1, 1)?.Trim(TRIMED_CHARACTERS) ?? "";
+                string rowDefinition = GetExcelCellValue(range.Rows[r], 1, 1)?.Trim(TRIMED_CHARACTERS) ?? "";
 
                 if (rowDefinition.StartsWith("###") && rowDefinition.Substring(3).TrimStart(TRIMED_CHARACTERS).ToUpper() == "FIELD_NAME")
                 {
@@ -97,10 +115,13 @@ namespace STK.DataTable
             {
                 Range row = range.Rows[r];
 
-                List<FieldInfo> columnInfos = new List<FieldInfo> { null, null };
+                List<ColumnInfo> columnInfos = new List<ColumnInfo>();
                 for (int c = 2; c <= columnCount; ++c)
                 {
-                    columnInfos.Add(rowType.GetField(GetExcelCellValue(row, 1, c).Trim(TRIMED_CHARACTERS), BindingFlags.IgnoreCase | BindingFlags.NonPublic | BindingFlags.Instance));
+                    ColumnInfo columnInfo = new ColumnInfo(rowType, row, c);
+                    columnInfos.Add(columnInfo);
+
+                    c += columnInfo.width - 1;
                 }
 
 
@@ -157,6 +178,12 @@ namespace STK.DataTable
 
         public dynamic Parse(Type type, string input)
         {
+            if (string.IsNullOrEmpty(input))
+            {
+                return null;
+            }
+
+
             input = input.Trim(TRIMED_CHARACTERS);
 
 
@@ -166,7 +193,7 @@ namespace STK.DataTable
             }
 
 
-            return ParseObject(type, input.Trim(ARRAY_START, ARRAY_END));
+            return ParseObject(type, input);
         }
 
         public dynamic ParseObject(Type type, string input)
@@ -304,46 +331,109 @@ namespace STK.DataTable
         protected virtual dynamic GetExcelCellValue(Range range, int row, int column) => range.Cells[row, column].MergeArea.Cells[1, 1].Value;
 
 
-        private dynamic ReadExcelRow(Type rowType, Range input, List<FieldInfo> columnInfos, DataTable dataTable, DataTableRow.Metadata metadata)
+        private dynamic ReadExcelRow(Type rowType, Range input, List<ColumnInfo> columnInfos, DataTable dataTable, DataTableRow.Metadata metadata)
         {
             dynamic dataTableRow = Activator.CreateInstance(rowType, new object[] { dataTable, metadata });
 
 
-            for (int c = 2; c < columnInfos.Count; ++c)
+            foreach (ColumnInfo columnInfo in columnInfos)
             {
-                FieldInfo columnInfo = columnInfos[c];
-                Type columnType = columnInfo.FieldType;
-                dynamic value = GetExcelCellValue(input, 1, c);
+                FieldInfo fieldInfo = columnInfo.fieldInfo;
+                Type type = columnInfo.type;
 
-                if (value is string)
+
+                int c = columnInfo.startIndex;
+
+                if (columnInfo.width == 1)
                 {
-                    columnInfo.SetValue(dataTableRow, Parse(columnType, value));
-                }
-                else
-                {
-                    if (value.GetType() == columnType)
+                    dynamic cellValue = GetExcelCellValue(input, 1, c);
+
+                    if (cellValue is string)
                     {
-                        columnInfo.SetValue(dataTableRow, value);
+                        fieldInfo.SetValue(dataTableRow, Parse(type, cellValue));
                     }
-                    else if (value is double)
+                    else
                     {
-                        if (columnType == typeof(int))
+                        if (cellValue.GetType() == type)
                         {
-                            columnInfo.SetValue(dataTableRow, (int)(double)value);
+                            fieldInfo.SetValue(dataTableRow, cellValue);
                         }
-                        else if (columnType == typeof(float))
+                        else if (cellValue is double)
                         {
-                            columnInfo.SetValue(dataTableRow, (float)(double)value);
+                            if (type == typeof(int))
+                            {
+                                fieldInfo.SetValue(dataTableRow, (int)(double)cellValue);
+                            }
+                            else if (type == typeof(float))
+                            {
+                                fieldInfo.SetValue(dataTableRow, (float)(double)cellValue);
+                            }
+                            else
+                            {
+                                throw new Exception();
+                            }
                         }
                         else
                         {
                             throw new Exception();
                         }
                     }
-                    else
+                }
+                else
+                {
+                    if (!type.IsArray)
                     {
                         throw new Exception();
                     }
+
+
+                    Type elementType = type.GetElementType();
+                    dynamic list = Activator.CreateInstance(LIST_TYPE.MakeGenericType(elementType));
+
+                    int C = c + columnInfo.width;
+
+                    for (; c < C; ++c)
+                    {
+                        dynamic cellValue = GetExcelCellValue(input, 1, c);
+
+                        if (string.IsNullOrEmpty(cellValue))
+                        {
+                            list.Add(null);
+                        }
+                        else if (cellValue is string)
+                        {
+                            list.Add(Parse(elementType, cellValue));
+                        }
+                        else
+                        {
+                            if (cellValue.GetType() == elementType)
+                            {
+                                list.Add(cellValue);
+                            }
+                            else if (cellValue is double)
+                            {
+                                if (elementType == typeof(int))
+                                {
+                                    list.Add((int)(double)cellValue);
+                                }
+                                else if (elementType == typeof(float))
+                                {
+                                    list.Add((float)(double)cellValue);
+                                }
+                                else
+                                {
+                                    throw new Exception();
+                                }
+                            }
+                            else
+                            {
+                                throw new Exception();
+                            }
+                        }
+                    }
+
+                    dynamic value = list.ToArray();
+                    fieldInfo.SetValue(dataTableRow, list.ToArray());
                 }
             }
 
