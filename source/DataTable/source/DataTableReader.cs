@@ -12,6 +12,7 @@ namespace STK.DataTable
     {
         private class ColumnInfo
         {
+            public readonly string name;
             public readonly FieldInfo fieldInfo;
             public readonly Type type;
             public readonly int startIndex;
@@ -21,10 +22,10 @@ namespace STK.DataTable
             public ColumnInfo(Type rowType, Range row, int column)
             {
                 Range mergeArea = row.Cells[1, column].MergeArea;
-                dynamic v = mergeArea.Cells[1, 1].Value;
 
-                fieldInfo = rowType.GetField(mergeArea.Cells[1, 1].Value.Trim(TRIMED_CHARACTERS), BindingFlags.IgnoreCase | BindingFlags.NonPublic | BindingFlags.Instance);
-                type = fieldInfo.FieldType;
+                name = mergeArea.Cells[1, 1].Value.Trim(TRIMED_CHARACTERS);
+                fieldInfo = rowType.GetField(name, BindingFlags.IgnoreCase | BindingFlags.NonPublic | BindingFlags.Instance);
+                type = fieldInfo == null ? null : fieldInfo.FieldType;
                 startIndex = column;
                 width = mergeArea.Columns.Count;
             }
@@ -64,17 +65,18 @@ namespace STK.DataTable
 
             rowType = null;
             dynamic dataTable = null;
-            Type customExcelReadingInterface = null;
+            Type customExcelRowReadingInterface = null;
 
 
             int r = 1;
+            Range row;
 
 
             bool hasTableType = false;
 
             for (; r <= rowCount; ++r)
             {
-                Range row = range.Rows[r];
+                row = range.Rows[r];
                 string rowDefinition = GetExcelCellValue(row, 1, 1)?.Trim(TRIMED_CHARACTERS) ?? "";
 
                 if (rowDefinition.StartsWith("###") && rowDefinition.Substring(3).TrimStart(TRIMED_CHARACTERS).ToUpper() == "TABLE_TYPE")
@@ -82,7 +84,7 @@ namespace STK.DataTable
                     Type dataTableType = GetType(GetExcelCellValue(row, 1, 2));
                     rowType = dataTableType.BaseType.GenericTypeArguments[0];
                     dataTable = Activator.CreateInstance(dataTableType, new object[] { worksheet.Name });
-                    customExcelReadingInterface = rowType.GetInterface(ICUSTOMEXCELROWREADING_INTERFACE);
+                    customExcelRowReadingInterface = rowType.GetInterface(ICUSTOMEXCELROWREADING_INTERFACE);
                     hasTableType = true;
                     break;
                 }
@@ -111,20 +113,19 @@ namespace STK.DataTable
             }
 
 
-            if (customExcelReadingInterface == null)
+            row = range.Rows[r];
+
+            List<ColumnInfo> columnInfos = new List<ColumnInfo>();
+            for (int c = 2; c <= columnCount; ++c)
             {
-                Range row = range.Rows[r];
+                ColumnInfo columnInfo = new ColumnInfo(rowType, row, c);
+                columnInfos.Add(columnInfo);
 
-                List<ColumnInfo> columnInfos = new List<ColumnInfo>();
-                for (int c = 2; c <= columnCount; ++c)
-                {
-                    ColumnInfo columnInfo = new ColumnInfo(rowType, row, c);
-                    columnInfos.Add(columnInfo);
+                c += columnInfo.width - 1;
+            }
 
-                    c += columnInfo.width - 1;
-                }
-
-
+            if (customExcelRowReadingInterface == null)
+            {
                 for (; r <= rowCount; ++r)
                 {
                     row = range.Rows[r];
@@ -137,15 +138,10 @@ namespace STK.DataTable
             }
             else
             {
-                Dictionary<string, object> arg = new Dictionary<string, object>();
-                Range row = range.Rows[r];
-
-                List<string> columnInfos = new List<string> { null, null };
-                for (int c = 2; c <= columnCount; ++c)
+                Dictionary<string, object> dictionary = new Dictionary<string, object>();
+                foreach (ColumnInfo columnInfo in columnInfos)
                 {
-                    string columnInfo = GetExcelCellValue(row, 1, c).Trim(TRIMED_CHARACTERS);
-                    columnInfos.Add(columnInfo);
-                    arg.Add(columnInfo, "");
+                    dictionary.Add(columnInfo.name, "");
                 }
 
 
@@ -157,13 +153,31 @@ namespace STK.DataTable
                     {
                         dynamic dataTableRow = Activator.CreateInstance(rowType, new object[] { dataTable, new DataTableRow.Metadata(r) });
 
-
-                        for (int c = 2; c <= columnCount; ++c)
+                        foreach (ColumnInfo columnInfo in columnInfos)
                         {
-                            arg[columnInfos[c]] = GetExcelCellValue(row, 1, c);
+                            int c = columnInfo.startIndex;
+                            int w = columnInfo.width;
+
+                            if (w == 1)
+                            {
+                                dictionary[columnInfo.name] = GetExcelCellValue(row, 1, c);
+                            }
+                            else
+                            {
+                                List<object> list = new List<object>();
+
+                                int C = c + w;
+                                for (; c < C; ++c)
+                                {
+                                    list.Add(GetExcelCellValue(row, 1, c));
+                                }
+
+                                dictionary[columnInfo.name] = list;
+                            }
                         }
 
-                        ICUSTOMEXCELROWREADING_GENERATEFROMSOURCE.Invoke(dataTableRow, new object[] { arg });
+
+                        ICUSTOMEXCELROWREADING_GENERATEFROMSOURCE.Invoke(dataTableRow, new object[] { dictionary });
 
 
                         dataTable.AddRow(dataTableRow);
