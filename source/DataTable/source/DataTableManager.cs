@@ -12,7 +12,7 @@ namespace STK.DataTable
 
         private List<DataTable> dataTableList = new List<DataTable>();
         private Dictionary<string, DataTable> dataTableDictionary = new Dictionary<string, DataTable>();
-        internal readonly JsonSerializer serializer = new JsonSerializer() { Formatting = Formatting.Indented, TypeNameHandling = TypeNameHandling.Objects };
+        internal readonly JsonSerializer serializer = new JsonSerializer() { TypeNameHandling = TypeNameHandling.Objects };
 
 
         public int DataTableCount => dataTableList.Count;

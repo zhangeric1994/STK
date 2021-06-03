@@ -8,7 +8,7 @@ namespace STK.DataTable
 {
     public sealed class TextTableExport
     {
-        public static readonly string SPLIT_STRING = "\n[NEW]\n";
+        public static readonly string SPLIT_STRING = "\n<<<NEXT>>>\n";
         public static readonly string TEXT_KEY_FILE = "KEYS.txt";
 
 
@@ -24,9 +24,11 @@ namespace STK.DataTable
             }
 
 
+            Worksheet firstWorkSheet = null;
             Range firstSheetRange = null;
             foreach (Worksheet worksheet in worksheets)
             {
+                firstWorkSheet = worksheet;
                 firstSheetRange = worksheet.UsedRange;
                 break;
             }
@@ -37,22 +39,39 @@ namespace STK.DataTable
 
             for (int c = 3; c <= columnCount; ++c)
             {
-                string language = firstSheetRange.Cells[1, c].Value.Trim(' ', '\n');
+                string expectedLanguage = firstSheetRange.Cells[1, c].Value?.Trim(DataTableReader.TRIMED_CHARACTERS);
+
+                if (string.IsNullOrEmpty(expectedLanguage))
+                {
+                    throw new Exception(string.Format("[TextTableExporter] Undefined language\n  Worksheet: {0}\n  Column: {1}", firstWorkSheet.Name, c));
+                }
+
+
                 foreach (Worksheet worksheet in worksheets)
                 {
                     Range range = worksheet.UsedRange;
 
                     if (range.Columns.Count != columnCount)
                     {
-                        throw new Exception(string.Format("Unmatch column count: {0}\nExpected:{1} Actual:{2}", worksheet.Name, columnCount, range.Columns.Count));
+                        throw new Exception(string.Format("[TextTableExport] Unmatched column count\n  Worksheet: {0}\n  Expected:{1}\n  Actual:{2}", worksheet.Name, columnCount, range.Columns.Count));
                     }
-                    else if (range.Cells[1, c].Value.Trim(' ', '\n') != language)
+                    else
                     {
-                        throw new Exception(string.Format("Unmatched language: {0}\nExpected:{1} Actual:{2}", worksheet.Name, language, range.Cells[1, c].Value.Trim(' ', '\n')));
+                        string language = range.Cells[1, c].Value?.Trim(DataTableReader.TRIMED_CHARACTERS);
+
+                        if (string.IsNullOrEmpty(language))
+                        {
+                            throw new Exception(string.Format("[TextTableExport] Undefined language\n  Worksheet: {0}\n  Column: {1}\n  Expected:{2}", worksheet.Name, c, expectedLanguage));
+                        }
+                        else if (language != expectedLanguage)
+                        {
+                            throw new Exception(string.Format("[TextTableExport] Unmatched language\n  Worksheet: {0}\n  Column: {1}\n  Expected:{2}\n  Actual:{3}", worksheet.Name, c, expectedLanguage, range.Cells[1, c].Value.Trim(' ', '\n')));
+                        }
                     }
                 }
 
-                languages.Add(language);
+
+                languages.Add(expectedLanguage);
             }
 
 
@@ -78,13 +97,13 @@ namespace STK.DataTable
 
                 for (int r = 2; r <= rowCount; ++r)
                 {
-                    if (!string.IsNullOrEmpty(range.Cells[r, 1].Value?.Trim(' ', '\n')))
+                    if (!string.IsNullOrEmpty(range.Cells[r, 1].Value?.Trim(DataTableReader.TRIMED_CHARACTERS)))
                     {
                         doExport.Add(false);
                     }
                     else
                     {
-                        string key = range.Cells[r, 2].Value.Trim(' ', '\n');
+                        string key = range.Cells[r, 2].Value?.Trim(DataTableReader.TRIMED_CHARACTERS);
 
                         if (string.IsNullOrEmpty(key))
                         {
@@ -92,7 +111,7 @@ namespace STK.DataTable
                         }
                         else if (keys.Contains(key))
                         {
-                            throw new Exception("Duplicated key: " + key);
+                            throw new Exception(string.Format("[TextTableExport] Duplicated key\n  Worksheet: {0}\n  Row: {1}\n  Key: {2}", worksheet.Name, r, key));
                         }
                         else
                         {
@@ -136,7 +155,7 @@ namespace STK.DataTable
                     {
                         if (doExport[r])
                         {
-                            contents += range.Cells[r, c].Value.Trim(' ') + SPLIT_STRING;
+                            contents += range.Cells[r, c].Value + SPLIT_STRING;
                         }
                     }
                 }
@@ -162,23 +181,23 @@ namespace STK.DataTable
 
 
             int r = 2;
-            while (range.Cells[r, 1].Value != "")
+            while (!string.IsNullOrEmpty(range.Cells[r, 1].Value?.Trim(DataTableReader.TRIMED_CHARACTERS)))
             {
                 ++r;
             }
             int firstRowIndex = r;
             doExport.Add(true);
 
-            string contents = range.Cells[r++, 2].Value.Trim(' ', '\n');
+            string contents = range.Cells[r++, 2].Value.Trim(DataTableReader.TRIMED_CHARACTERS);
             for (; r <= rowCount; ++r)
             {
-                if (!string.IsNullOrEmpty(range.Cells[r, 1].Value?.Trim(' ', '\n')))
+                if (!string.IsNullOrEmpty(range.Cells[r, 1].Value?.Trim(DataTableReader.TRIMED_CHARACTERS)))
                 {
                     doExport.Add(false);
                 }
                 else
                 {
-                    string key = range.Cells[r, 2].Value.Trim(' ', '\n');
+                    string key = range.Cells[r, 2].Value?.Trim(DataTableReader.TRIMED_CHARACTERS);
 
                     if (string.IsNullOrEmpty(key))
                     {
@@ -195,6 +214,7 @@ namespace STK.DataTable
                     }
                 }
             }
+
 
             char lastCharacterInDirectory = directory[directory.Length - 1];
             if (lastCharacterInDirectory != '/' && lastCharacterInDirectory != '\\')
@@ -213,7 +233,7 @@ namespace STK.DataTable
             int columnCount = range.Columns.Count;
             for (int c = 3; c <= columnCount; ++c)
             {
-                string language = range.Cells[1, c].Value.Trim(' ', '\n');
+                string language = range.Cells[1, c].Value.Trim(DataTableReader.TRIMED_CHARACTERS);
 
                 if (language == "KEYS")
                 {
@@ -222,12 +242,13 @@ namespace STK.DataTable
 
 
                 r = firstRowIndex;
-                contents = range.Cells[r++, c].Value.Trim(' ');
+                contents = range.Cells[r++, c].Value;
+
                 for (; r <= rowCount; ++r)
                 {
                     if (doExport[r - firstRowIndex])
                     {
-                        contents += SPLIT_STRING + range.Cells[r, c].Value.Trim(' ');
+                        contents += SPLIT_STRING + range.Cells[r, c].Value;
                     }
                 }
 

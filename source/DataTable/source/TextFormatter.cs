@@ -11,6 +11,7 @@ namespace STK.DataTable
             String,
             Text,
             TextVariable,
+            TextFormat,
         }
 
 
@@ -92,6 +93,29 @@ namespace STK.DataTable
 
                         leftIndex = ++rightIndex;
                         break;
+
+
+                    //case '<':
+                    //    if (rightIndex != leftIndex)
+                    //    {
+                    //        nodes.Add(new StringNode(input.Substring(leftIndex, rightIndex - leftIndex)));
+                    //    }
+
+                    //    leftIndex = ++rightIndex;
+                    //    currentReadingType = ReadingType.Text;
+                    //    break;
+
+
+                    //case '>':
+                    //    if (currentReadingType != ReadingType.Text)
+                    //    {
+                    //        throw new Exception();
+                    //    }
+
+                    //    nodes.Add(new TextNode(input.Substring(leftIndex, rightIndex - leftIndex)));
+
+                    //    leftIndex = ++rightIndex;
+                    //    break;
 
 
                     default:
