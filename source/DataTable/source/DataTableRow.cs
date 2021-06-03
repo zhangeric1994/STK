@@ -28,27 +28,22 @@ namespace STK.DataTable
 
         [JsonProperty]
         public readonly Metadata metadata;
-        [JsonProperty]
-        public readonly int uid;
 
 
         [JsonIgnore]
-        public int ID { get => GetIDFromUID(uid); }
+        public int UID { get; internal set; }
         [JsonIgnore]
-        public int TableUID { get => GetTableUIDFromUID(uid); }
+        public int ID { get => GetIDFromUID(UID); }
+        [JsonIgnore]
+        public int TableUID { get => GetTableUIDFromUID(UID); }
 
 
         public DataTableRow() { }
 
 
-        public DataTableRow(DataTable dataTable, Metadata metadata)
+        public DataTableRow(Metadata metadata)
         {
             this.metadata = metadata;
-
-            if (dataTable != null)
-            {
-                this.uid = dataTable.uid << 24 + dataTable.Count + 1;
-            }
         }
     }
 
@@ -60,7 +55,7 @@ namespace STK.DataTable
         public abstract KeyType Key { get; }
 
 
-        public DictionaryDataTableRow(DataTable dataTable, Metadata metadata) : base(dataTable, metadata) { }
+        public DictionaryDataTableRow(Metadata metadata) : base(metadata) { }
     }
 
 
@@ -71,7 +66,7 @@ namespace STK.DataTable
         public abstract KeyType2 Key2 { get; }
 
 
-        public DictionaryDataTableRow(DataTable dataTable, Metadata metadata) : base(dataTable, metadata) { }
+        public DictionaryDataTableRow(Metadata metadata) : base(metadata) { }
     }
 
 

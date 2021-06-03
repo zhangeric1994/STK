@@ -132,7 +132,7 @@ namespace STK.DataTable
 
                     if (string.IsNullOrEmpty(GetExcelCellValue(row, 1, 1)))
                     {
-                        dataTable.AddRow(ReadExcelRow(rowType, row, columnInfos, dataTable, new DataTableRow.Metadata(r)));
+                        dataTable.AddRow(ReadExcelRow(rowType, row, columnInfos, new DataTableRow.Metadata(r)));
                     }
                 }
             }
@@ -151,7 +151,7 @@ namespace STK.DataTable
 
                     if (string.IsNullOrEmpty(GetExcelCellValue(row, 1, 1)))
                     {
-                        dynamic dataTableRow = Activator.CreateInstance(rowType, new object[] { dataTable, new DataTableRow.Metadata(r) });
+                        dynamic dataTableRow = Activator.CreateInstance(rowType, new object[] { new DataTableRow.Metadata(r) });
 
                         foreach (ColumnInfo columnInfo in columnInfos)
                         {
@@ -345,9 +345,9 @@ namespace STK.DataTable
         protected virtual dynamic GetExcelCellValue(Range range, int row, int column) => range.Cells[row, column].MergeArea.Cells[1, 1].Value;
 
 
-        private dynamic ReadExcelRow(Type rowType, Range input, List<ColumnInfo> columnInfos, DataTable dataTable, DataTableRow.Metadata metadata)
+        private dynamic ReadExcelRow(Type rowType, Range input, List<ColumnInfo> columnInfos, DataTableRow.Metadata metadata)
         {
-            dynamic dataTableRow = Activator.CreateInstance(rowType, new object[] { dataTable, metadata });
+            dynamic dataTableRow = Activator.CreateInstance(rowType, new object[] { metadata });
 
 
             foreach (ColumnInfo columnInfo in columnInfos)

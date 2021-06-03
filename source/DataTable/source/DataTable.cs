@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.Serialization;
@@ -10,37 +11,44 @@ namespace STK.DataTable
     public abstract class DataTable
     {
         public readonly string name;
-        public readonly int uid;
+        
+        protected int uid;
 
 
+        [JsonIgnore]
+        public virtual int UID { get; internal set; }
+        [JsonIgnore]
         public abstract int Count { get; }
 
 
         public DataTable(string name)
         {
             this.name = name;
-            this.uid = DataTableManager.Instance.AddDataTable(this);
         }
 
 
         public abstract T GetDataByID<T>(int id) where T : DataTableRow;
 
 
-        public void ExportToJSON(string directory)
+        public string ExportToJSON(string directory)
         {
-            using (StreamWriter sw = File.CreateText(string.Format("{0}\\{1}.json", directory, name)))
+            string file = string.Format("{0}\\{1}.json", directory, name);
+
+            using (StreamWriter sw = File.CreateText(file))
             {
                 using (JsonTextWriter jtw = new JsonTextWriter(sw))
                 {
                     DataTableManager.Instance.serializer.Serialize(jtw, this);
                 }
             }
+
+            return file;
         }
     }
 
 
     [JsonObject]
-    public abstract class DataTable<RowType> : DataTable where RowType : DataTableRow
+    public abstract class DataTable<RowType> : DataTable, IEnumerable<RowType> where RowType : DataTableRow
     {
         [JsonProperty]
         protected List<RowType> rows = new List<RowType>();
@@ -48,11 +56,29 @@ namespace STK.DataTable
 
         [JsonIgnore]
         public RowType this[int index] => rows[index];
+
+
+        [JsonIgnore]
+        public override int UID
+        {
+            internal set
+            {
+                if (value != uid)
+                {
+                    uid = value;
+
+                    int id = 1;
+                    foreach (RowType row in rows)
+                    {
+                        row.UID = uid << 28 + id++;
+                    }
+                }
+            }
+        }
+
         [JsonIgnore]
         public override int Count => rows.Count;
-        [JsonIgnore]
-        public virtual IEnumerable<RowType> Rows => rows;
-
+        
 
         public DataTable(string name) : base(name) { }
 
@@ -64,6 +90,10 @@ namespace STK.DataTable
         {
             rows.Add(row);
         }
+
+
+        IEnumerator<RowType> IEnumerable<RowType>.GetEnumerator() => rows.GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator() => rows.GetEnumerator();
     }
 
 

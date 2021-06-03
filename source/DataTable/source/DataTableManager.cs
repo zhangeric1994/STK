@@ -42,21 +42,7 @@ namespace STK.DataTable
                 using (JsonTextReader jtr = new JsonTextReader(tr))
                 {
                     DataTable dataTable = serializer.Deserialize(jtr) as DataTable;
-
-                    string key = dataTable.name;
-
-                    if (dataTableDictionary.TryGetValue(key, out DataTable oldDataTable))
-                    {
-                        dataTableDictionary[key] = dataTable;
-
-                        int uid = oldDataTable.uid;
-                        dataTableList[uid - 1] = dataTable;
-                    }
-                    else
-                    {
-                        dataTableDictionary.Add(key, dataTable);
-                        dataTableList.Insert(dataTable.uid, dataTable);
-                    }
+                    dataTable.UID = AddDataTable(dataTable);
                 }
             }
         }
@@ -78,7 +64,7 @@ namespace STK.DataTable
             {
                 dataTableDictionary[key] = dataTable;
 
-                int uid = oldDataTable.uid;
+                int uid = oldDataTable.UID;
                 dataTableList[uid - 1] = dataTable;
 
                 return uid;
